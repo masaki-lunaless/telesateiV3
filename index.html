@@ -417,6 +417,8 @@ async function aiAppraise(input) {
     if (Array.isArray(r.conds) && r.conds.length) S.fa.conds = r.conds;
     if (r.kinshu) S.fa.kinshu = r.kinshu;
     if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) S.fa.stone = r.stone;
+    if (GEMS.includes(r.stoneMain)) S.fa.stoneMain = r.stoneMain;
+    if (GEMS.includes(r.stoneWaki)) S.fa.stoneWaki = r.stoneWaki;
     if (r.weight) S.fa.weight = String(r.weight);
     if (r.hiju) S.fa.hiju = String(r.hiju);
     S.fa._aiNote = r.note || '';
