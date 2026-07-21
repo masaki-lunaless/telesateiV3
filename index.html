@@ -413,6 +413,7 @@ async function aiAppraise(input) {
     if (r.model) { S.fa.model = r.model; S.fa.serial = r.model; }
     if (Array.isArray(r.conds) && r.conds.length) S.fa.conds = r.conds;
     if (r.kinshu) S.fa.kinshu = r.kinshu;
+    if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) S.fa.stone = r.stone;
     if (r.weight) S.fa.weight = String(r.weight);
     if (r.hiju) S.fa.hiju = String(r.hiju);
     S.fa._aiNote = r.note || '';
@@ -598,6 +599,8 @@ function itemNotes(a, i) {
   if (ctBits) parts.push('ct: ' + ctBits);
   if (a.conds && a.conds.length) parts.push('状態詳細: ' + a.conds.join('・'));
   if ((a.conds || []).includes('破れや破損')) parts.push('⚠️ ジャンク扱い');
+  if (a._aiFlags && a._aiFlags.length) parts.push('AI確認ポイント: ' + a._aiFlags.join(' ／ '));
+  if (a._aiNote) parts.push('AI所見: ' + a._aiNote);
   if ((a._imgs || []).length) parts.push('画像: ' + a._imgs.length + '枚添付');
   return parts.join(NL);
 }
