@@ -62,6 +62,7 @@
   .opt-grid { display: grid; gap: 8px; }
   .opt-btn { border: 1.5px solid var(--border); border-radius: 12px; padding: 15px 10px; font-size: 14.5px; font-weight: 700; background: #fff; color: var(--text); text-align: center; min-height: 52px; }
   .opt-btn.active { border-color: var(--navy); background: var(--navy-light); color: var(--navy); }
+  .opt-btn.active.ai-pick { border-color: #4A6FD4; background: #E8EEFC; color: #2E4CA8; box-shadow: 0 0 0 1px #4A6FD4 inset; }
   .chip-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
   .chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 12px 16px; font-size: 13.5px; font-weight: 600; background: #fff; color: var(--sub); }
   .chip.active { border-color: var(--lav-deep); background: var(--lav-light); color: var(--lav-deep); }
@@ -276,9 +277,11 @@ function itemQs(a) {
       { id: 'conds', t: 'multi', label: '状態は？（複数可）', opts: WATCH_CONDS }, imgQ);
   } else { // 貴金属
     qs.push({ id: 'kinshu', t: 'choice', label: '金種は？', opts: ['K24', 'K22', 'K18', 'K14', 'K10', 'Pt1000', 'Pt950', 'Pt900', 'Pt850', 'インゴットK', 'インゴットP', 'コンビ'] },
-      { id: 'weight', t: 'text', label: '総重量（g）は？', ph: '例：15.2', req: true, num: true },
-      { id: 'hiju', t: 'text', label: '比重値は？', ph: '数値を入力', num: true, skip: 'できなかった' },
-      { id: 'jsei', t: 'choice', label: '磁性は？', opts: ['有', '無'], hint: '「有」の場合は預かり対応品になります' },
+      { id: 'weight', t: 'text', label: '総重量（g）は？', ph: '例：15.2', req: true, num: true });
+    // 石付き確定（AI判定）で比重が「できなかった」自動セット済みなら質問自体を省略
+    if (!(a.stone && a.stone !== 'なし' && a.hiju === 'できなかった'))
+      qs.push({ id: 'hiju', t: 'text', label: '比重値は？', ph: '数値を入力', num: true, skip: 'できなかった' });
+    qs.push({ id: 'jsei', t: 'choice', label: '磁性は？', opts: ['有', '無'], hint: '「有」の場合は預かり対応品になります' },
       { id: 'stone', t: 'choice', label: '主石・脇石は？', opts: ['なし', '主石のみ', '脇石のみ', '両方'] });
     if (a.stone === '主石のみ' || a.stone === '両方') qs.push({ id: 'stoneMain', t: 'choice', label: '主石の種類は？', opts: GEMS });
     if (a.stone === '脇石のみ' || a.stone === '両方') qs.push({ id: 'stoneWaki', t: 'choice', label: '脇石の種類は？', opts: GEMS });
@@ -407,26 +410,28 @@ async function aiAppraise(input) {
     // 写真を商品画像としてセット
     S.fa._imgs = imgs;
     // プリフィル（AIが答えられた分だけ。空文字は上書きしない）
-    if (CATS.includes(r.category)) S.fa.cat = r.category;
-    if (r.brand) S.fa.brand = r.brand;
-    if (r.name) S.fa.name = r.name;
+    S.fa._aiSet = [];
+    const setA = (k, v) => { S.fa[k] = v; S.fa._aiSet.push(k); };
+    if (CATS.includes(r.category)) setA('cat', r.category);
+    if (r.brand) setA('brand', r.brand);
+    if (r.name) setA('name', r.name);
     if (r.model) {
-      if (S.fa.cat === '時計') S.fa.model = r.model; // 時計のserialはケースシリアル。混入させない
-      else S.fa.serial = r.model;
+      if (S.fa.cat === '時計') setA('model', r.model); // 時計のserialはケースシリアル。混入させない
+      else setA('serial', r.model);
     }
-    if (Array.isArray(r.conds) && r.conds.length) S.fa.conds = r.conds;
-    if (r.kinshu) S.fa.kinshu = r.kinshu;
-    if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) S.fa.stone = r.stone;
-    if (S.fa.stone && S.fa.stone !== 'なし') S.fa.hiju = 'できなかった'; // 石付きは比重測定が成立しない
-    if (GEMS.includes(r.stoneMain)) S.fa.stoneMain = r.stoneMain;
-    if (GEMS.includes(r.stoneWaki)) S.fa.stoneWaki = r.stoneWaki;
-    if (['済', '不可'].includes(r.gem)) S.fa.gem = r.gem;
-    if (['OK', 'NG'].includes(r.dia)) S.fa.dia = r.dia;
-    if (r.ct) S.fa.ct = String(r.ct);
-    if (r.ctWaki) S.fa.ctWaki = String(r.ctWaki);
-    if (['有', '無'].includes(r.jsei)) S.fa.jsei = r.jsei;
-    if (r.weight) S.fa.weight = String(r.weight);
-    if (r.hiju) S.fa.hiju = String(r.hiju);
+    if (Array.isArray(r.conds) && r.conds.length) setA('conds', r.conds);
+    if (r.kinshu) setA('kinshu', r.kinshu);
+    if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) setA('stone', r.stone);
+    if (S.fa.stone && S.fa.stone !== 'なし') setA('hiju', 'できなかった'); // 石付きは比重測定が成立しない→質問も省略される
+    if (GEMS.includes(r.stoneMain)) setA('stoneMain', r.stoneMain);
+    if (GEMS.includes(r.stoneWaki)) setA('stoneWaki', r.stoneWaki);
+    if (['済', '不可'].includes(r.gem)) setA('gem', r.gem);
+    if (['OK', 'NG'].includes(r.dia)) setA('dia', r.dia);
+    if (r.ct) setA('ct', String(r.ct));
+    if (r.ctWaki) setA('ctWaki', String(r.ctWaki));
+    if (['有', '無'].includes(r.jsei)) setA('jsei', r.jsei);
+    if (r.weight) setA('weight', String(r.weight));
+    if (r.hiju && !(S.fa.stone && S.fa.stone !== 'なし')) setA('hiju', String(r.hiju));
     S.fa._aiNote = r.note || '';
     S.fa._aiFlags = Array.isArray(r.flags) ? r.flags : [];
     if (S.fa.cat) S.ai = 1; // カテゴリ確定済みなら次の質問へ
@@ -491,7 +496,8 @@ function renderBody() {
         + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:12px">全体像・刻印・計量器の表示（g/SG）を撮ると精度UP。手書きメモより機器の表示を</div>`
       : '';
     body.innerHTML = aiBtn + `<div class="opt-grid" style="grid-template-columns:${cols}">` +
-      q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ' active' : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>';
+      q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ((store._aiSet || []).includes(q.id) ? ' active ai-pick' : ' active') : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>' +
+      ((store._aiSet || []).includes(q.id) && store[q.id] ? '<div style="font-size:11.5px;color:#8FA8E8;text-align:center;margin-top:10px">🤖 AI判定でこの選択肢が入っています。違っていればタップで修正</div>' : '');
   } else if (q.t === 'multi') {
     const sel = store[q.id] || [];
     body.innerHTML = '<div class="chip-wrap">' +
