@@ -599,8 +599,6 @@ function itemNotes(a, i) {
   if (ctBits) parts.push('ct: ' + ctBits);
   if (a.conds && a.conds.length) parts.push('状態詳細: ' + a.conds.join('・'));
   if ((a.conds || []).includes('破れや破損')) parts.push('⚠️ ジャンク扱い');
-  if (a._aiFlags && a._aiFlags.length) parts.push('AI確認ポイント: ' + a._aiFlags.join(' ／ '));
-  if (a._aiNote) parts.push('AI所見: ' + a._aiNote);
   if ((a._imgs || []).length) parts.push('画像: ' + a._imgs.length + '枚添付');
   return parts.join(NL);
 }
@@ -610,6 +608,26 @@ async function uploadImages(taskId, imgs) {
     fd.append('file', img.file, img.file.name);
     await fetch(`https://app.asana.com/api/1.0/tasks/${taskId}/attachments`, {
       method: 'POST', headers: { 'Authorization': `Bearer ${ASANA_PAT}` }, body: fd
+    });
+  }
+}
+async function postAiComment(taskId, a, i) {
+  if (!((a._aiFlags && a._aiFlags.length) || a._aiNote)) return;
+  const NL = String.fromCharCode(10);
+  const eh = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const title = itemTitle(a) || '商品' + (i + 1);
+  const hdr = { 'Authorization': `Bearer ${ASANA_PAT}`, 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  let h = `<strong>🔍 AI査定メモ — ${eh(title)}</strong>`;
+  if (a._aiFlags && a._aiFlags.length) h += NL + '<ul>' + a._aiFlags.map(f => '<li>' + eh(f) + '</li>').join('') + '</ul>';
+  if (a._aiNote) h += NL + '<strong>所見:</strong> ' + eh(a._aiNote);
+  const res = await fetch(`https://app.asana.com/api/1.0/tasks/${taskId}/stories`, {
+    method: 'POST', headers: hdr, body: JSON.stringify({ data: { html_text: '<body>' + h + '</body>' } })
+  });
+  if (!res.ok) {
+    // html_textが弾かれた場合はプレーンテキストで再投稿
+    await fetch(`https://app.asana.com/api/1.0/tasks/${taskId}/stories`, {
+      method: 'POST', headers: hdr,
+      body: JSON.stringify({ data: { text: '🔍 AI査定メモ — ' + title + NL + (a._aiFlags || []).map(f => '・' + f).join(NL) + (a._aiNote ? NL + '所見: ' + a._aiNote : '') } })
     });
   }
 }
@@ -640,6 +658,7 @@ async function submitToAsana() {
       if (!res.ok) throw new Error(data.errors?.[0]?.message || '作成失敗');
       mainTaskId = data.data.gid;
       await uploadImages(mainTaskId, S.cart.flatMap(a => a._imgs || []));
+      for (let i = 0; i < S.cart.length; i++) await postAiComment(mainTaskId, S.cart[i], i);
     }
     if (S.azukari.length > 0) {
       const azNotes = ['<start>', '店舗: ' + store, '起票者: ' + requester, '【検査預かり】'].join(NL) + NL + NL
@@ -658,6 +677,7 @@ async function submitToAsana() {
           body: JSON.stringify({ data: { task: azId } })
         });
         await uploadImages(azId, S.azukari.flatMap(a => a._imgs || []));
+        for (let i = 0; i < S.azukari.length; i++) await postAiComment(azId, S.azukari[i], i);
       }
     }
     $('sent-link').innerHTML = mainTaskId
