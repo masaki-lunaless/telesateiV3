@@ -410,7 +410,10 @@ async function aiAppraise(input) {
     if (CATS.includes(r.category)) S.fa.cat = r.category;
     if (r.brand) S.fa.brand = r.brand;
     if (r.name) S.fa.name = r.name;
-    if (r.model) { S.fa.model = r.model; S.fa.serial = r.model; }
+    if (r.model) {
+      if (S.fa.cat === '時計') S.fa.model = r.model; // 時計のserialはケースシリアル。混入させない
+      else S.fa.serial = r.model;
+    }
     if (Array.isArray(r.conds) && r.conds.length) S.fa.conds = r.conds;
     if (r.kinshu) S.fa.kinshu = r.kinshu;
     if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) S.fa.stone = r.stone;
