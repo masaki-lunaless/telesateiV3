@@ -417,7 +417,7 @@ async function aiAppraise(input) {
     if (S.fa.cat) S.ai = 1; // カテゴリ確定済みなら次の質問へ
     render();
     showToast('✅ AI判定を反映しました。各項目を確認してください');
-    if (S.fa._aiFlags.length) setTimeout(() => showModal('⚠️ AIからの注意', S.fa._aiFlags.join('\n'), () => {}), 600);
+    if (S.fa._aiFlags.length) setTimeout(() => showModal('AIからの確認ポイント', S.fa._aiFlags.join('\n'), () => {}, { icon: '🔍', okLabel: '確認しました', hideCancel: true }), 600);
   } catch (e) {
     showToast('AI判定エラー: 通信に失敗しました');
   } finally {
@@ -670,14 +670,15 @@ function resetAll() {
 }
 
 // ---- modal / toast ----
-function showModal(title, msg, onOk) {
+function showModal(title, msg, onOk, opts) {
+  opts = opts || {};
   const box = $('modal-box');
-  box.innerHTML = `<div style="font-size:28px">⚠️</div><h3>${esc(title)}</h3><p>${esc(msg)}</p>
+  box.innerHTML = `<div style="font-size:28px">${opts.icon || '⚠️'}</div><h3>${esc(title)}</h3><p>${esc(msg)}</p>
     <div style="display:flex;gap:8px">
-    <button class="btn btn-ghost" id="modal-no">キャンセル</button>
-    <button class="btn btn-primary" id="modal-ok" style="flex:1.2">預かりに追加</button></div>`;
+    ${opts.hideCancel ? '' : '<button class="btn btn-ghost" id="modal-no">キャンセル</button>'}
+    <button class="btn btn-primary" id="modal-ok" style="flex:1.2">${esc(opts.okLabel || '預かりに追加')}</button></div>`;
   $('modal-overlay').classList.add('show');
-  $('modal-no').onclick = () => $('modal-overlay').classList.remove('show');
+  if (!opts.hideCancel) $('modal-no').onclick = () => $('modal-overlay').classList.remove('show');
   $('modal-ok').onclick = () => { $('modal-overlay').classList.remove('show'); onOk(); };
 }
 function showToast(msg) {
