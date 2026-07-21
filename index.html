@@ -253,7 +253,10 @@ function itemQs(a) {
   if (!c) return qs;
   const brandQ = { id: 'brand', t: 'text', brand: true, label: 'ブランドは？', ph: 'ひらがなでもOK（例：るい）', req: true };
   const nameQ = { id: 'name', t: 'text', label: '商品名は？', ph: '例：ネヴァーフルMM', req: true };
-  const imgQ = { id: 'img', t: 'img', label: '写真を撮ろう' };
+  const hasImgs = (a._imgs || []).length > 0;
+  const imgQ = hasImgs
+    ? { id: 'img', t: 'img', label: '写真はこれでOK？', hint: 'AI判定に使った写真をそのまま添付します。追加・削除もできます' }
+    : { id: 'img', t: 'img', label: '写真を撮ろう' };
   if (c === 'ブランドバッグ' || c === 'ブランド小物') {
     qs.push(brandQ, nameQ,
       { id: 'serial', t: 'text', label: '型番は？', ph: '例：M40156', hint: 'わかる範囲でOK', skip: 'わからない' },
@@ -501,7 +504,7 @@ function renderBody() {
     const imgs = store._imgs || [];
     body.innerHTML =
       `<input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="addImages(this)">`
-      + `<button class="img-drop" onclick="$('img-input').click()">📷 タップして撮影（${imgs.length}枚）<br><span style="font-size:12px">複数可</span></button>`
+      + `<button class="img-drop" onclick="$('img-input').click()">${imgs.length ? '📷 追加で撮影する（現在' + imgs.length + '枚）' : '📷 タップして撮影（0枚）'}<br><span style="font-size:12px">複数可</span></button>`
       + '<div class="img-previews">' + imgs.map((im, i) => `<div class="imgp"><img src="${im.dataUrl}"><button onclick="removeImage(${i})">×</button></div>`).join('') + '</div>'
       + '<button class="btn btn-primary" onclick="finishItem()">この商品をカートに追加</button>';
   }
