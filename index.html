@@ -524,8 +524,14 @@ function renderCart() {
 function init() {
   const saved = localStorage.getItem('asana_pat');
   AI_TOKEN = localStorage.getItem('ai_token') || '';
-  if (saved) { ASANA_PAT = saved; startApp(); }
-  else $('pat-screen').classList.add('show');
+  const forceSetup = new URLSearchParams(location.search).has('reset');
+  if (forceSetup) history.replaceState(null, '', location.pathname);
+  if (saved && !forceSetup) { ASANA_PAT = saved; startApp(); }
+  else {
+    if (saved) $('pat-input').value = saved;
+    if (AI_TOKEN) $('ai-token-input').value = AI_TOKEN;
+    $('pat-screen').classList.add('show');
+  }
 }
 function savePat() {
   const val = $('pat-input').value.trim();
