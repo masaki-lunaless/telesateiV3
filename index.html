@@ -488,7 +488,7 @@ function renderBody() {
     const val = store[q.id] || '';
     const dim = q.req && !val.trim() ? ' dim' : '';
     body.innerHTML =
-      `<input class="q-input" type="text" ${q.num ? 'inputmode="decimal"' : ''} value="${esc(val)}" placeholder="${esc(q.ph || '')}" oninput="${q.brand ? 'brandInput(this)' : 'textInput(this)'}" onkeydown="if(event.key==='Enter'){${q.brand ? 'textNext()' : 'textNext()'}}">`
+      `<input class="q-input" type="text" ${q.num ? 'inputmode="decimal"' : ''} value="${esc(val)}" placeholder="${esc(q.ph || '')}" oninput="${q.brand ? 'brandInput(this)' : 'textInput(this)'}" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){textNext()}">`
       + (q.brand ? '<div class="sugg-wrap" id="sugg-wrap"></div>' : '')
       + `<div class="btn-row">${q.skip ? `<button class="btn btn-ghost" onclick="skipQ()">${esc(q.skip)}</button>` : ''}<button class="btn btn-primary${dim}" id="q-next" onclick="textNext()">次へ</button></div>`;
     if (q.brand) renderSuggs();
