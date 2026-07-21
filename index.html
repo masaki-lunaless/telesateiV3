@@ -275,7 +275,7 @@ function itemQs(a) {
       { id: 'acc', t: 'multi', label: '付属品は？（複数可）', opts: WATCH_ACCS },
       { id: 'conds', t: 'multi', label: '状態は？（複数可）', opts: WATCH_CONDS }, imgQ);
   } else { // 貴金属
-    qs.push({ id: 'kinshu', t: 'choice', label: '金種は？', opts: ['K24', 'K18', 'K14', 'K10', 'Pt1000', 'Pt950', 'Pt900', 'Pt850', 'インゴットK', 'インゴットP', 'コンビ'] },
+    qs.push({ id: 'kinshu', t: 'choice', label: '金種は？', opts: ['K24', 'K22', 'K18', 'K14', 'K10', 'Pt1000', 'Pt950', 'Pt900', 'Pt850', 'インゴットK', 'インゴットP', 'コンビ'] },
       { id: 'weight', t: 'text', label: '総重量（g）は？', ph: '例：15.2', req: true, num: true },
       { id: 'hiju', t: 'text', label: '比重値は？', ph: '数値を入力', num: true, skip: 'できなかった' },
       { id: 'jsei', t: 'choice', label: '磁性は？', opts: ['有', '無'], hint: '「有」の場合は預かり対応品になります' },
