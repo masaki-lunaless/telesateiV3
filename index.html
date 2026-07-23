@@ -434,13 +434,13 @@ function renderTut() {
   if (TUT.i >= TUT.steps.length) {
     $('tut-count').textContent = `${TUT.cat}・撮影完了`;
     b.innerHTML = `${thumbs}<div class="tut-msg">📸 撮影完了！（${TUT.files.length}枚）</div>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:8px" ${TUT.files.length ? '' : 'disabled'} onclick="tutFinish()">🔍 AI解析を開始</button>
+      <button class="btn" style="width:100%;margin-bottom:8px;background:#D4537E;color:#fff;border:none" ${TUT.files.length ? '' : 'disabled'} onclick="tutFinish()">🔍 AI解析を開始</button>
       <button class="btn btn-ghost" style="width:100%" onclick="tutShoot()">＋ 追加で撮る</button>`;
     return;
   }
   $('tut-count').textContent = `${TUT.cat}　${TUT.i + 1} / ${TUT.steps.length}`;
   b.innerHTML = `${thumbs}<div class="tut-msg">${esc(TUT.steps[TUT.i])}</div>
-    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="tutShoot()">📷 撮影する</button>
+    <button class="btn" style="width:100%;margin-bottom:8px;background:#D4537E;color:#fff;border:none" onclick="tutShoot()">📷 撮影する</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" onclick="tutSkip()">この部位はない（スキップ）</button>
     ${TUT.files.length ? `<button class="btn btn-ghost" style="width:100%" onclick="tutFinish()">🔍 ここまでで解析を開始</button>` : ''}`;
 }
@@ -559,9 +559,9 @@ function renderBody() {
     const cols = q.opts.length > 5 || q.opts.some(o => o.length <= 4) ? '1fr 1fr' : '1fr';
     const aiBtn = (q.id === 'cat' && AI_TOKEN)
       ? `<input type="file" id="ai-img-input" accept="image/*" multiple style="display:none" onchange="aiAppraise(this)">`
-        + `<button class="btn btn-primary" style="width:100%;margin-bottom:4px" onclick="startTutorial()">📷 ガイド撮影でAI判定</button>`
-        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:6px">「次はこの写真」の案内どおりに撮るだけで自動入力されます</div>`
-        + `<div style="text-align:center;margin-bottom:12px"><span class="pat-reset" onclick="$('ai-img-input').click()">まとめて選んでAI判定（慣れてる人向け）</span></div>`
+        + `<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="$('ai-img-input').click()">📷 まとめて選んでAI判定</button>`
+        + `<button class="btn" style="width:100%;margin-bottom:4px;background:#D4537E;color:#fff;border:none" onclick="startTutorial()">🔰 ガイド撮影でAI判定</button>`
+        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:12px">🔰は「次はこの写真」の案内どおりに撮るだけで自動入力されます</div>`
       : '';
     body.innerHTML = aiBtn + `<div class="opt-grid" style="grid-template-columns:${cols}">` +
       q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ((store._aiSet || []).includes(q.id) ? ' active ai-pick' : ' active') : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>' +
