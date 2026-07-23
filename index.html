@@ -132,6 +132,17 @@
   @keyframes aispin { to { transform: rotate(360deg); } }
   .ai-loading-text { color: #fff; font-size: 15px; font-weight: 700; }
   .ai-loading-sub { color: rgba(255,255,255,.65); font-size: 12px; }
+
+  /* ---- ガイド撮影（Classicモード（ガイド撮影）） ---- */
+  #tut-overlay { position: fixed; inset: 0; z-index: 260; background: rgba(20,26,52,.55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; padding: 20px; }
+  #tut-overlay.show { display: flex; }
+  .tut-card { background: #fff; border-radius: 18px; padding: 20px; width: 100%; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .tut-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #888; margin-bottom: 6px; }
+  .tut-cancel { text-decoration: underline; cursor: pointer; }
+  .tut-msg { font-size: 20px; font-weight: 800; color: #2E3C6E; text-align: center; margin: 14px 0 18px; line-height: 1.4; }
+  .tut-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tut-thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #E4E6F0; }
+  .tut-cat { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 </style>
 </head>
 <body>
@@ -202,6 +213,8 @@
 </div>
 <div id="modal-overlay"><div class="modal-box" id="modal-box"></div></div>
 <div id="ai-loading"><div class="ai-spinner"></div><div class="ai-loading-text">🤖 AIが解析中…</div><div class="ai-loading-sub">数秒かかります</div></div>
+<div id="tut-overlay"><div class="tut-card"><div class="tut-head"><span id="tut-count"></span><span class="tut-cancel" onclick="tutCancel()">やめる</span></div><div id="tut-body"></div></div></div>
+<input type="file" id="tut-input" accept="image/*" capture="environment" style="display:none" onchange="tutOnFile(this)">
 <div id="toast"></div>
 
 <script>
@@ -222,6 +235,14 @@ const BRANDS = {
 
 const GEMS = ['ダイヤモンド','ルビー','サファイア','エメラルド','パール','アクアマリン','アメジスト','トパーズ','オパール','ターコイズ','ガーネット','ペリドット','タンザナイト','スピネル','ムーンストーン','アレキサンドライト','ジルコン','コーラル','ラピスラズリ','不明'];
 const CATS = ['ブランドバッグ','ブランド小物','ブランドジュエリー','時計','貴金属'];
+// Classicモード（ガイド撮影）：カテゴリ別の撮影ガイド（査定員が現物を見る順番）
+const SHOT_GUIDES = {
+  'ブランドバッグ': ['正面を撮って！', '背面を撮って！', '底面を撮って！', '角（四隅のスレ）を撮って！', 'ハンドル・持ち手を撮って！', '内装を撮って！', 'クリード・型番刻印を撮って！', '金具の刻印を撮って！'],
+  'ブランド小物': ['正面を撮って！', '背面を撮って！', '角・縁のスレを撮って！', '内側を撮って！', '刻印・日付コードを撮って！', '金具のロゴを撮って！'],
+  'ブランドジュエリー': ['全体を撮って！', '地金の刻印を撮って！', '主石のアップを撮って！', '脇石・パヴェのアップを撮って！', 'テスター・計量器の表示を撮って！（あれば）'],
+  '時計': ['文字盤の正面を撮って！', '裏蓋（型番・シリアル）を撮って！', 'ブレス・バックルの刻印を撮って！', 'ケースサイド・リューズを撮って！', '付属品（箱・保証書）を撮って！（あれば）'],
+  '貴金属': ['全体を撮って！（石の有無がわかる引きで）', '刻印のアップを撮って！', '計量器の重量表示（g）を撮って！', '計量器の比重表示（SG）を撮って！（石付きなら飛ばしてOK）']
+};
 const BRAND_CONDS = ['傷','汚れ','シミ','色褪せ','歪み','変色','さび','メッキ剥げ','石取れ','臭いあり','破れや破損'];
 const WATCH_CONDS = ['ガラス傷・欠け','レザーひび割れ','稼働','動作不可','カレンダー送り不良','使用傷','バンド非純正'];
 const METAL_CONDS = ['傷','擦り傷','汚れ','シミ','カビ','色褪せ','金具の傷','ちぎれかけ','破れ','臭い'];
@@ -383,9 +404,54 @@ function addImages(input) {
 }
 function removeImage(i) { S.fa._imgs.splice(i, 1); renderBody(); }
 // ---- AI査定（Worker proxy経由） ----
+// ---- ガイド撮影（Classicモード（ガイド撮影）） ----
+let TUT = null;
+function startTutorial() { TUT = { cat: null, steps: [], i: 0, files: [], urls: [] }; renderTut(); $('tut-overlay').classList.add('show'); }
+function tutCancel() { TUT = null; $('tut-overlay').classList.remove('show'); }
+function tutStart(c) { TUT.cat = c; TUT.steps = SHOT_GUIDES[c] || []; TUT.i = 0; renderTut(); }
+function tutShoot() { $('tut-input').click(); }
+function tutOnFile(input) {
+  const f = input.files[0]; input.value = '';
+  if (!f || !TUT) return;
+  TUT.files.push(f); TUT.urls.push(URL.createObjectURL(f));
+  TUT.i++; renderTut();
+}
+function tutSkip() { TUT.i++; renderTut(); }
+function tutFinish() {
+  const files = TUT.files, cat = TUT.cat;
+  tutCancel();
+  runAiAppraise(files, cat);
+}
+function renderTut() {
+  if (!TUT) return;
+  const b = $('tut-body');
+  const thumbs = TUT.urls.length ? `<div class="tut-thumbs">${TUT.urls.map(u => `<img src="${u}">`).join('')}</div>` : '';
+  if (!TUT.cat) {
+    $('tut-count').textContent = 'ガイド撮影';
+    b.innerHTML = `<div class="tut-msg">何を査定する？</div><div class="tut-cat">${CATS.map(c => `<button class="btn btn-ghost" onclick="tutStart('${c}')">${c}</button>`).join('')}</div>`;
+    return;
+  }
+  if (TUT.i >= TUT.steps.length) {
+    $('tut-count').textContent = `${TUT.cat}・撮影完了`;
+    b.innerHTML = `${thumbs}<div class="tut-msg">📸 撮影完了！（${TUT.files.length}枚）</div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:8px" ${TUT.files.length ? '' : 'disabled'} onclick="tutFinish()">🔍 AI解析を開始</button>
+      <button class="btn btn-ghost" style="width:100%" onclick="tutShoot()">＋ 追加で撮る</button>`;
+    return;
+  }
+  $('tut-count').textContent = `${TUT.cat}　${TUT.i + 1} / ${TUT.steps.length}`;
+  b.innerHTML = `${thumbs}<div class="tut-msg">${esc(TUT.steps[TUT.i])}</div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="tutShoot()">📷 撮影する</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" onclick="tutSkip()">この部位はない（スキップ）</button>
+    ${TUT.files.length ? `<button class="btn btn-ghost" style="width:100%" onclick="tutFinish()">🔍 ここまでで解析を開始</button>` : ''}`;
+}
+
 async function aiAppraise(input) {
   const files = Array.from(input.files).slice(0, 6);
   input.value = '';
+  runAiAppraise(files);
+}
+async function runAiAppraise(files, catHint) {
+  files = (files || []).slice(0, 8);
   if (!files.length) return;
   $('ai-loading').classList.add('show');
   try {
@@ -434,6 +500,7 @@ async function aiAppraise(input) {
     if (r.hiju && !(S.fa.stone && S.fa.stone !== 'なし')) setA('hiju', String(r.hiju));
     S.fa._aiNote = r.note || '';
     S.fa._aiFlags = Array.isArray(r.flags) ? r.flags : [];
+    if (catHint && CATS.includes(catHint)) { S.fa.cat = catHint; S.fa._aiSet = S.fa._aiSet.filter(k => k !== 'cat'); } // ガイド撮影の選択カテゴリを正とする
     if (S.fa.cat) S.ai = 1; // カテゴリ確定済みなら次の質問へ
     render();
     showToast('✅ AI判定を反映しました。各項目を確認してください');
@@ -492,8 +559,9 @@ function renderBody() {
     const cols = q.opts.length > 5 || q.opts.some(o => o.length <= 4) ? '1fr 1fr' : '1fr';
     const aiBtn = (q.id === 'cat' && AI_TOKEN)
       ? `<input type="file" id="ai-img-input" accept="image/*" multiple style="display:none" onchange="aiAppraise(this)">`
-        + `<button class="btn btn-ghost" style="width:100%;margin-bottom:4px" onclick="$('ai-img-input').click()">📷 写真からAI判定（自動入力）</button>`
-        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:12px">全体像・刻印・計量器の表示（g/SG）を撮ると精度UP。手書きメモより機器の表示を</div>`
+        + `<button class="btn btn-primary" style="width:100%;margin-bottom:4px" onclick="startTutorial()">📷 ガイド撮影でAI判定</button>`
+        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:6px">「次はこの写真」の案内どおりに撮るだけで自動入力されます</div>`
+        + `<div style="text-align:center;margin-bottom:12px"><span class="pat-reset" onclick="$('ai-img-input').click()">まとめて選んでAI判定（慣れてる人向け）</span></div>`
       : '';
     body.innerHTML = aiBtn + `<div class="opt-grid" style="grid-template-columns:${cols}">` +
       q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ((store._aiSet || []).includes(q.id) ? ' active ai-pick' : ' active') : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>' +
@@ -558,8 +626,15 @@ function renderCart() {
 function init() {
   const saved = localStorage.getItem('asana_pat');
   AI_TOKEN = localStorage.getItem('ai_token') || '';
-  const forceSetup = new URLSearchParams(location.search).has('reset');
-  if (forceSetup) history.replaceState(null, '', location.pathname);
+  const params = new URLSearchParams(location.search);
+  const forceSetup = params.has('reset');
+  const demo = params.has('demo');
+  if (forceSetup || demo) history.replaceState(null, '', location.pathname);
+  if (demo) {
+    // プレビューモード：依頼情報をダミーで埋めて商品入力から開始（送信は通常通り可能なので注意）
+    S.fi = { store: 'プレビュー', requester: 'プレビュー', total: '1', repeater: 'いいえ', aimi: 'いいえ' };
+    S.stage = 'item'; S.ai = 0; S.fa = {};
+  }
   if (saved && !forceSetup) { ASANA_PAT = saved; startApp(); }
   else {
     if (saved) $('pat-input').value = saved;
