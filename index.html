@@ -63,6 +63,8 @@
   .opt-btn { border: 1.5px solid var(--border); border-radius: 12px; padding: 15px 10px; font-size: 14.5px; font-weight: 700; background: #fff; color: var(--text); text-align: center; min-height: 52px; }
   .opt-btn.active { border-color: var(--navy); background: var(--navy-light); color: var(--navy); }
   .opt-btn.active.ai-pick { border-color: #4A6FD4; background: #E8EEFC; color: #2E4CA8; box-shadow: 0 0 0 1px #4A6FD4 inset; }
+  .q-input.ai-fill { border-color: #4A6FD4; background: #F5F9FF; }
+  .ai-cap { font-size: 11.5px; color: #8FA8E8; text-align: center; margin-top: 10px; }
   .chip-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
   .chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 12px 16px; font-size: 13.5px; font-weight: 600; background: #fff; color: var(--sub); }
   .chip.active { border-color: var(--lav-deep); background: var(--lav-light); color: var(--lav-deep); }
@@ -358,10 +360,19 @@ function adv() {
 function goBack() {
   const { isInfo, idx } = cur();
   if (!isInfo && idx === 0) {
-    if (S.cart.length || S.azukari.length) { goCart(); return; }
-    S.stage = 'info'; S.ii = infoQs(S.fi).length - 1;
+    // AI判定済みの商品から離脱しようとした場合は確認（再判定コストの誤発生防止）
+    if ((S.fa._aiSet || []).length) {
+      showModal('AI査定の入力中です', '戻るとこの商品のAI判定内容がリセットされます。写真が足りない場合は、最後の「写真はこれでOK？」画面で追加できます。戻りますか？', () => { leaveItem(); }, { icon: '🤖', okLabel: '内容を消して戻る' });
+      return;
+    }
+    leaveItem(); return;
   } else if (isInfo) S.ii = Math.max(0, idx - 1);
   else S.ai = Math.max(0, idx - 1);
+  render();
+}
+function leaveItem() {
+  if (S.cart.length || S.azukari.length) { goCart(); return; }
+  S.stage = 'info'; S.ii = infoQs(S.fi).length - 1;
   render();
 }
 function choose(val) { const { q, store } = cur(); store[q.id] = val; adv(); }
@@ -595,17 +606,20 @@ function renderBody() {
       : '';
     body.innerHTML = aiBtn + `<div class="opt-grid" style="grid-template-columns:${cols}">` +
       q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ((store._aiSet || []).includes(q.id) ? ' active ai-pick' : ' active') : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>' +
-      ((store._aiSet || []).includes(q.id) && store[q.id] ? '<div style="font-size:11.5px;color:#8FA8E8;text-align:center;margin-top:10px">🤖 AI判定でこの選択肢が入っています。違っていればタップで修正</div>' : '');
+      ((store._aiSet || []).includes(q.id) && store[q.id] ? '<div class="ai-cap">🤖 AI判定でこの選択肢が入っています。違っていればタップで修正</div>' : '');
   } else if (q.t === 'multi') {
     const sel = store[q.id] || [];
     body.innerHTML = '<div class="chip-wrap">' +
       q.opts.map(o => `<button class="chip${sel.includes(o) ? ' active' : ''}" onclick="toggleMulti('${esc(o)}')">${esc(o)}</button>`).join('') +
+      ((store._aiSet || []).includes(q.id) && sel.length ? '<div class="ai-cap">🤖 AI判定で選択済み。違っていればタップで修正</div>' : '') +
       `</div><button class="btn btn-primary" onclick="adv()">${sel.length ? '次へ（' + sel.length + '件選択）' : '該当なしで次へ'}</button>`;
   } else if (q.t === 'text') {
     const val = store[q.id] || '';
     const dim = q.req && !val.trim() ? ' dim' : '';
+    const aiFilled = (store._aiSet || []).includes(q.id) && val;
     body.innerHTML =
-      `<input class="q-input" type="text" ${q.num ? 'inputmode="decimal"' : ''} value="${esc(val)}" placeholder="${esc(q.ph || '')}" oninput="${q.brand ? 'brandInput(this)' : 'textInput(this)'}" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){textNext()}">`
+      `<input class="q-input${aiFilled ? ' ai-fill' : ''}" type="text" ${q.num ? 'inputmode="decimal"' : ''} value="${esc(val)}" placeholder="${esc(q.ph || '')}" oninput="${q.brand ? 'brandInput(this)' : 'textInput(this)'}" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){textNext()}">`
+      + (aiFilled ? '<div class="ai-cap">🤖 AI判定で入力済み。違っていれば書き換えてください</div>' : '')
       + (q.brand ? '<div class="sugg-wrap" id="sugg-wrap"></div>' : '')
       + `<div class="btn-row">${q.skip ? `<button class="btn btn-ghost" onclick="skipQ()">${esc(q.skip)}</button>` : ''}<button class="btn btn-primary${dim}" id="q-next" onclick="textNext()">次へ</button></div>`;
     if (q.brand) renderSuggs();
