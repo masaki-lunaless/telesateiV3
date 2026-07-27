@@ -65,6 +65,9 @@
   .opt-btn.active.ai-pick { border-color: #4A6FD4; background: #E8EEFC; color: #2E4CA8; box-shadow: 0 0 0 1px #4A6FD4 inset; }
   .q-input.ai-fill { border-color: #4A6FD4; background: #F5F9FF; }
   .ai-cap { font-size: 11.5px; color: #8FA8E8; text-align: center; margin-top: 10px; }
+  .size-row { display: flex; align-items: center; gap: 10px; }
+  .size-row .q-input { flex: 1; min-width: 0; }
+  .size-x { font-size: 16px; font-weight: 700; color: #5A5D75; flex-shrink: 0; }
   .chip-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
   .chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 12px 16px; font-size: 13.5px; font-weight: 600; background: #fff; color: var(--sub); }
   .chip.active { border-color: var(--lav-deep); background: var(--lav-light); color: var(--lav-deep); }
@@ -317,7 +320,7 @@ function itemQs(a) {
       if (a.stoneMain) {
         qs.push({ id: 'ctMode', t: 'choice', label: '主石の大きさは？', hint: 'ct数かサイズ、どちらか一方で入力します', opts: ['ct数で入力', 'サイズ(縦横cm)で入力'] });
         if (a.ctMode === 'ct数で入力') qs.push({ id: 'ct', t: 'text', label: 'ct数（主石）は？', ph: '例：0.5', num: true, skip: '不明' });
-        if (a.ctMode === 'サイズ(縦横cm)で入力') qs.push({ id: 'ctSize', t: 'text', label: '主石のサイズ（縦×横cm）は？', ph: '例：1.2×0.8', skip: '不明' });
+        if (a.ctMode === 'サイズ(縦横cm)で入力') qs.push({ id: 'ctSize', t: 'size2', label: '主石のサイズ（cm）は？', skip: '不明' });
       }
     }
     // ---- 脇石ブロック：種類 → 大きさ（ct or サイズの排他入力） ----
@@ -326,7 +329,7 @@ function itemQs(a) {
       if (a.stoneWaki) {
         qs.push({ id: 'ctModeWaki', t: 'choice', label: '脇石の大きさは？', hint: 'ct数かサイズ、どちらか一方で入力します', opts: ['ct数で入力', 'サイズ(縦横cm)で入力'] });
         if (a.ctModeWaki === 'ct数で入力') qs.push({ id: 'ctWaki', t: 'text', label: 'ct数（脇石）は？', ph: '例：0.1', num: true, skip: '不明' });
-        if (a.ctModeWaki === 'サイズ(縦横cm)で入力') qs.push({ id: 'ctWakiSize', t: 'text', label: '脇石のサイズ（縦×横cm）は？', ph: '例：0.3×0.3', skip: '不明' });
+        if (a.ctModeWaki === 'サイズ(縦横cm)で入力') qs.push({ id: 'ctWakiSize', t: 'size2', label: '脇石のサイズ（cm）は？', skip: '不明' });
       }
     }
     // ---- テスター：石種で出し分け（ジェムテスター対象外の石だけなら質問しない） ----
@@ -636,6 +639,13 @@ function renderBody() {
       + `<div class="btn-row">${q.skip ? `<button class="btn btn-ghost" onclick="skipQ()">${esc(q.skip)}</button>` : ''}<button class="btn btn-primary${dim}" id="q-next" onclick="textNext()">次へ</button></div>`;
     if (q.brand) renderSuggs();
     body.querySelector('input').focus({ preventScroll: true });
+  } else if (q.t === 'size2') {
+    const val = (store[q.id] === '不明') ? '' : (store[q.id] || '');
+    const parts = val.split('×');
+    body.innerHTML =
+      `<div class="size-row"><input class="q-input" id="sz-t" type="text" inputmode="decimal" placeholder="縦（例：1.2）" value="${esc(parts[0] || '')}" oninput="sizeInput()" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){adv()}"><span class="size-x">×</span><input class="q-input" id="sz-y" type="text" inputmode="decimal" placeholder="横（例：0.8）" value="${esc(parts[1] || '')}" oninput="sizeInput()" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){adv()}"><span class="size-x">cm</span></div>`
+      + `<div class="btn-row">${q.skip ? `<button class="btn btn-ghost" onclick="skipQ()">${esc(q.skip)}</button>` : ''}<button class="btn btn-primary" onclick="adv()">次へ</button></div>`;
+    body.querySelector('#sz-t').focus({ preventScroll: true });
   } else if (q.t === 'store') {
     body.innerHTML =
       `<input class="q-input" type="text" value="${esc(store.store || '')}" placeholder="${esc(q.ph)}" oninput="storeInput(this)">`
@@ -651,6 +661,11 @@ function renderBody() {
       + '<div class="img-previews">' + imgs.map((im, i) => `<div class="imgp"><img src="${im.dataUrl}"><button onclick="removeImage(${i})">×</button></div>`).join('') + '</div>'
       + '<button class="btn btn-primary" onclick="finishItem()">この商品をカートに追加</button>';
   }
+}
+function sizeInput() {
+  const { q, store } = cur();
+  const t = ($('sz-t').value || '').trim(), y = ($('sz-y').value || '').trim();
+  store[q.id] = (t && y) ? t + '×' + y : (t || y);
 }
 function goCart() { S.stage = 'cart'; render(); }
 function addAnother() { S.stage = 'item'; S.ai = 0; S.fa = {}; render(); }
