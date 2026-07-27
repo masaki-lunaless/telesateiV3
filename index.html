@@ -241,7 +241,13 @@ const SHOT_GUIDES = {
   'ブランドバッグ': ['正面を撮って！', '背面を撮って！', '底面を撮って！', '角（四隅のスレ）を撮って！', 'ハンドル・持ち手を撮って！', '内装を撮って！', 'クリード・型番刻印を撮って！', '金具の刻印を撮って！'],
   'ブランド小物': ['正面を撮って！', '背面を撮って！', '角・縁のスレを撮って！', '内側を撮って！', '刻印・日付コード・内側の布タグを撮って！', '金具のロゴを撮って！'],
   '時計': ['文字盤の正面を撮って！', '裏蓋（型番・シリアル）を撮って！', 'ブレス・バックルの刻印を撮って！', 'ケースサイド・リューズを撮って！', '付属品（箱・保証書）を撮って！（あれば）'],
-  '貴金属・ジュエリー': ['全体を撮って！（石の有無がわかる引きで）', '刻印のアップを撮って！', '主石・脇石のアップを撮って！（石があれば）', '計量器の重量表示（g）を撮って！', '計量器の比重表示（SG）を撮って！（石付きなら飛ばしてOK）']
+  '貴金属・ジュエリー': null // サブタイプ選択（METAL_SUBGUIDES）へ分岐
+};
+// 貴金属・ジュエリーの中身別ガイド
+const METAL_SUBGUIDES = {
+  'ジュエリー（指輪・ネックレス等）': ['全体を撮って！（石の有無がわかる引きで）', '刻印のアップを撮って！', '主石・脇石のアップを撮って！（あれば）', '計量器の重量表示（g）を撮って！', '計量器の比重表示（SG）を撮って！（石付きなら飛ばしてOK）'],
+  'コイン・インゴット・地金': ['表面の全体を撮って！', '裏面の全体を撮って！', '縁・刻印（品位表記）を撮って！', '計量器の重量表示（g）を撮って！', '計量器の比重表示（SG）を撮って！'],
+  'ブランドジュエリー': ['全体を撮って！', 'ブランド刻印・ロゴを撮って！', '地金の刻印を撮って！', '石のアップを撮って！（あれば）', '計量器の重量表示（g）を撮って！']
 };
 const BRAND_CONDS = ['傷','汚れ','シミ','色褪せ','歪み','変色','さび','メッキ剥げ','石取れ','臭いあり','破れや破損'];
 const WATCH_CONDS = ['ガラス傷・欠け','レザーひび割れ','稼働','動作不可','カレンダー送り不良','使用傷','バンド非純正'];
@@ -422,7 +428,8 @@ function removeImage(i) { S.fa._imgs.splice(i, 1); renderBody(); }
 let TUT = null;
 function startTutorial() { TUT = { cat: null, steps: [], i: 0, files: [], urls: [] }; renderTut(); $('tut-overlay').classList.add('show'); }
 function tutCancel() { TUT = null; $('tut-overlay').classList.remove('show'); }
-function tutStart(c) { TUT.cat = c; TUT.steps = SHOT_GUIDES[c] || []; TUT.i = 0; renderTut(); }
+function tutStart(c) { TUT.cat = c; TUT.sub = null; TUT.steps = SHOT_GUIDES[c] || []; TUT.i = 0; renderTut(); }
+function tutSub(sv) { TUT.sub = sv; TUT.steps = METAL_SUBGUIDES[sv] || []; TUT.i = 0; renderTut(); }
 function tutShoot() { $('tut-input').click(); }
 function tutOnFile(input) {
   const f = input.files[0]; input.value = '';
@@ -445,14 +452,19 @@ function renderTut() {
     b.innerHTML = `<div class="tut-msg">何を査定する？</div><div class="tut-cat">${CATS.map(c => `<button class="btn btn-ghost" onclick="tutStart('${c}')">${c}</button>`).join('')}</div>`;
     return;
   }
+  if (TUT.cat === '貴金属・ジュエリー' && !TUT.sub) {
+    $('tut-count').textContent = '貴金属・ジュエリー';
+    b.innerHTML = `<div class="tut-msg">どんなもの？</div><div style="display:grid;grid-template-columns:1fr;gap:8px">${Object.keys(METAL_SUBGUIDES).map(sv => `<button class="btn btn-ghost" onclick="tutSub('${sv}')">${sv}</button>`).join('')}</div>`;
+    return;
+  }
   if (TUT.i >= TUT.steps.length) {
-    $('tut-count').textContent = `${TUT.cat}・撮影完了`;
+    $('tut-count').textContent = `${TUT.sub || TUT.cat}・撮影完了`;
     b.innerHTML = `${thumbs}<div class="tut-msg">📸 撮影完了！（${TUT.files.length}枚）</div>
       <button class="btn" style="width:100%;margin-bottom:8px;background:#D4537E;color:#fff;border:none" ${TUT.files.length ? '' : 'disabled'} onclick="tutFinish()">🔍 AI解析を開始</button>
       <button class="btn btn-ghost" style="width:100%" onclick="tutShoot()">＋ 追加で撮る</button>`;
     return;
   }
-  $('tut-count').textContent = `${TUT.cat}　${TUT.i + 1} / ${TUT.steps.length}`;
+  $('tut-count').textContent = `${TUT.sub || TUT.cat}　${TUT.i + 1} / ${TUT.steps.length}`;
   b.innerHTML = `${thumbs}<div class="tut-msg">${esc(TUT.steps[TUT.i])}</div>
     <button class="btn" style="width:100%;margin-bottom:8px;background:#D4537E;color:#fff;border:none" onclick="tutShoot()">📷 撮影する</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" onclick="tutSkip()">この部位はない（スキップ）</button>
