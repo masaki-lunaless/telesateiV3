@@ -302,7 +302,7 @@ function itemQs(a) {
     if (a.hasBrand === 'ある') qs.push(brandQ, { ...nameQ, ph: '例：ラブリング' },
       { id: 'serial', t: 'text', label: '型番は？', ph: '例：B4085400', hint: 'わかる範囲でOK', skip: 'わからない' });
     qs.push({ id: 'kinshu', t: 'choice', label: '金種は？', opts: ['K24', 'K22', 'K18', 'K14', 'K10', 'Pt1000', 'Pt950', 'Pt900', 'Pt850', 'Kインゴット', 'Ptインゴット', 'コンビ', 'シルバー925', 'シルバー950'] },
-      { id: 'weight', t: 'text', label: '総重量（g）は？', ph: '例：15.2', req: true, num: true });
+      { id: 'weight', t: 'text', label: '総重量（g）は？', ph: '例：15.2', req: true, num: true, hint: a._specWeight ? 'この型の公称重量は' + a._specWeight + 'g。必ず計量器の実測値を入力してください' : undefined });
     // 石付き確定（AI判定）で比重が「できなかった」自動セット済みなら質問自体を省略
     if (!(a.stone && a.stone !== 'なし' && a.hiju === 'できなかった'))
       qs.push({ id: 'hiju', t: 'text', label: '比重値は？', ph: '数値を入力', num: true, skip: 'できなかった' });
@@ -525,6 +525,7 @@ async function runAiAppraise(files, catHint) {
     if (r.ct) { setA('ct', String(r.ct)); setA('ctMode', 'ct数で入力'); }
     if (r.ctWaki) { setA('ctWaki', String(r.ctWaki)); setA('ctModeWaki', 'ct数で入力'); }
     if (['有', '無'].includes(r.jsei)) setA('jsei', r.jsei);
+    if (r.specWeight) S.fa._specWeight = String(r.specWeight); // 公称重量（規格値）。実測のweightとは別管理
     if (r.weight) setA('weight', String(r.weight));
     if (r.hiju && !(S.fa.stone && S.fa.stone !== 'なし')) setA('hiju', String(r.hiju));
     S.fa._aiNote = r.note || '';
@@ -710,6 +711,7 @@ function itemNotes(a, i) {
   if (a.acc && a.acc.length) parts.push('付属品: ' + a.acc.join('・'));
   if (a.kinshu) parts.push('金種: ' + a.kinshu);
   if (a.weight) parts.push('総重量: ' + a.weight + 'g');
+  if (a._specWeight) parts.push('公称重量: ' + a._specWeight + 'g（規格値・要実測照合）');
   if (a.hiju) parts.push('比重値: ' + a.hiju);
   if (a.jsei) parts.push('磁性: ' + a.jsei);
   if (a.stone) parts.push('主石・脇石: ' + a.stone);
