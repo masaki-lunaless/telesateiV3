@@ -498,12 +498,12 @@ function renderTut() {
 }
 
 async function aiAppraise(input) {
-  const files = Array.from(input.files).slice(0, 6);
+  const files = Array.from(input.files).slice(0, 10);
   input.value = '';
   runAiAppraise(files);
 }
 async function runAiAppraise(files, catHint) {
-  files = (files || []).slice(0, 8);
+  files = (files || []).slice(0, 10); // Worker側上限と同期
   if (!files.length) return;
   $('ai-loading').classList.add('show');
   try {
@@ -623,7 +623,7 @@ function renderBody() {
       ? `<input type="file" id="ai-img-input" accept="image/*" multiple style="display:none" onchange="aiAppraise(this)">`
         + `<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="$('ai-img-input').click()">📷 まとめて選んでAI判定</button>`
         + `<button class="btn" style="width:100%;margin-bottom:4px;background:#D4537E;color:#fff;border:none" onclick="startTutorial()">🔰 ガイド撮影でAI判定</button>`
-        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:12px">🔰は「次はこの写真」の案内どおりに撮るだけで自動入力されます</div>`
+        + `<div style="font-size:11.5px;color:#B4B6C6;text-align:center;margin-bottom:12px">🔰は「次はこの写真」の案内どおりに撮るだけで自動入力されます（写真は最大10枚まで判定に使用）</div>`
       : '';
     body.innerHTML = aiBtn + `<div class="opt-grid" style="grid-template-columns:${cols}">` +
       q.opts.map(o => `<button class="opt-btn${store[q.id] === o ? ((store._aiSet || []).includes(q.id) ? ' active ai-pick' : ' active') : ''}" onclick="choose('${esc(o)}')">${esc(o)}</button>`).join('') + '</div>' +
