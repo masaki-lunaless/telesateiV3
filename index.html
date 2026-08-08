@@ -537,8 +537,12 @@ async function runAiAppraise(files, catHint) {
     if (r.brand) setA('brand', r.brand);
     if (r.name) setA('name', r.name);
     if (r.model) {
-      if (S.fa.cat === '時計') setA('model', r.model); // 時計のserialはケースシリアル。混入させない
+      if (S.fa.cat === '時計') setA('model', r.model);
       else setA('serial', r.model);
+    }
+    if (S.fa.cat === '時計') {
+      if (r.serial) setA('serial', String(r.serial)); // ケース裏・ギャラから読めたシリアルのみ
+      if (r.caseSize) setA('size', String(r.caseSize)); // モデル特定時は公式ケース径
     }
     if (Array.isArray(r.conds) && r.conds.length) setA('conds', r.conds);
     if (r.kinshu) setA('kinshu', r.kinshu);
@@ -551,6 +555,8 @@ async function runAiAppraise(files, catHint) {
     if (r.ct) { setA('ct', String(r.ct)); setA('ctMode', 'ct数で入力'); }
     if (r.ctWaki) { setA('ctWaki', String(r.ctWaki)); setA('ctModeWaki', 'ct数で入力'); }
     if (['有', '無'].includes(r.jsei)) setA('jsei', r.jsei);
+    if (Array.isArray(r.acc)) { const wa = r.acc.filter(x => WATCH_ACCS.includes(x)); if (wa.length) setA('acc', wa); }
+    if (['済', '不可'].includes(r.turbo)) setA('turbo', r.turbo);
     if (r.specWeight) S.fa._specWeight = String(r.specWeight); // 公称重量（規格値）。実測のweightとは別管理
     if (r.weight) setA('weight', String(r.weight));
     if (r.hiju && !(S.fa.stone && S.fa.stone !== 'なし')) setA('hiju', String(r.hiju));
