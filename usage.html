@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telesatei / 利用量</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #F4F6FC; min-height: 100vh; padding: 24px 16px; }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #2E3C6E; }
+  .header span { font-size: 13px; color: #8A90B0; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(46,60,110,.08); }
+  .card-title { font-size: 12px; font-weight: 600; color: #8A90B0; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .big-num { font-size: 42px; font-weight: 800; color: #2E3C6E; line-height: 1; }
+  .big-sub { font-size: 13px; color: #8A90B0; margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .client-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F0F2FA; }
+  .client-row:last-child { border-bottom: none; }
+  .client-name { font-size: 14px; font-weight: 600; color: #2E3C6E; }
+  .client-calls { font-size: 14px; color: #4A6FD4; font-weight: 700; }
+  .client-yen { font-size: 12px; color: #8A90B0; }
+  .setup { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 8px rgba(46,60,110,.08); }
+  .setup label { font-size: 13px; font-weight: 600; color: #5A5D75; display: block; margin-bottom: 6px; }
+  .setup input { width: 100%; border: 1.5px solid #D5D9EA; border-radius: 10px; padding: 11px 14px; font-size: 14px; color: #1F2440; outline: none; margin-bottom: 12px; }
+  .setup input:focus { border-color: #4A6FD4; }
+  .btn { width: 100%; background: #2E3C6E; color: #fff; border: none; border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn:active { opacity: .85; }
+  .btn-sm { background: #F0F2FA; color: #5A5D75; font-size: 13px; padding: 8px 14px; width: auto; border-radius: 8px; margin-top: 8px; }
+  .month-tab { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { background: #F0F2FA; color: #5A5D75; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .tab.active { background: #2E3C6E; color: #fff; }
+  .err { color: #C0392B; font-size: 13px; margin-top: 8px; }
+  .price-note { font-size: 11px; color: #B0B6D0; margin-top: 2px; }
+  .refresh { float: right; font-size: 12px; color: #8A90B0; cursor: pointer; text-decoration: underline; }
+  .spinner { text-align: center; padding: 32px; color: #8A90B0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Telesatei 利用量</h1>
+  <span id="last-updated"></span>
+</div>
+
+<div id="app"></div>
+
+<script>
+const PROXY = 'https://telesatei-proxy.lunaless.workers.dev';
+const PRICE = 30; // 1コール 30円
+
+function save(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+function load(k) { try { return localStorage.getItem(k) || ''; } catch(e) { return ''; } }
+
+let token = load('usage_admin_token');
+let allData = null;
+
+async function fetchUsage() {
+  const res = await fetch(PROXY + '/usage', { headers: { 'Authorization': 'Bearer ' + token } });
+  if (res.status === 401) throw new Error('unauthorized');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
+}
+
+function parseData(raw) {
+  // raw: { "happiness:2026-08": 42, "happiness:2026-08:img": 126, ... }
+  const months = new Set();
+  const clients = new Set();
+  const calls = {}, imgs = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const parts = k.split(':');
+    if (parts.length === 2) {
+      clients.add(parts[0]); months.add(parts[1]);
+      calls[k] = v;
+    } else if (parts.length === 3 && parts[2] === 'img') {
+      imgs[parts[0] + ':' + parts[1]] = v;
+    }
+  }
+  return { months: [...months].sort().reverse(), clients: [...clients].sort(), calls, imgs };
+}
+
+function renderSetup(err) {
+  document.getElementById('app').innerHTML = `
+    <div class="setup">
+      <label>ADMIN TOKEN</label>
+      <input type="password" id="tok-input" placeholder="tok_admin_..." value="${token}">
+      ${err ? `<div class="err">${err}</div>` : ''}
+      <button class="btn" onclick="doLogin()">確認する</button>
+      ${token ? `<br><button class="btn btn-sm" onclick="resetToken()">トークンをリセット</button>` : ''}
+    </div>`;
+}
+
+function resetToken() { token = ''; save('usage_admin_token', ''); renderSetup(); }
+
+async function doLogin() {
+  token = document.getElementById('tok-input').value.trim();
+  save('usage_admin_token', token);
+  await load_and_render();
+}
+
+let currentMonth = null;
+
+function renderDashboard(month) {
+  const { months, clients, calls, imgs } = allData;
+  if (!currentMonth || !months.includes(currentMonth)) currentMonth = months[0];
+  if (month) currentMonth = month;
+
+  const ym = currentMonth;
+  let totalCalls = 0, totalImgs = 0;
+  const clientRows = clients.map(c => {
+    const n = calls[c + ':' + ym] || 0;
+    const ni = imgs[c + ':' + ym] || 0;
+    totalCalls += n; totalImgs += ni;
+    return { name: c, calls: n, imgs: ni };
+  }).filter(r => r.calls > 0);
+
+  const yen = totalCalls * PRICE;
+  const ymLabel = ym ? ym.replace('-', '年') + '月' : '';
+
+  document.getElementById('last-updated').textContent = '更新: ' + new Date().toLocaleTimeString('ja-JP');
+
+  document.getElementById('app').innerHTML = `
+    <div class="month-tab">
+      ${months.map(m => `<button class="tab ${m === currentMonth ? 'active' : ''}" onclick="renderDashboard('${m}')">${m.replace('-', '年')}月</button>`).join('')}
+      <span class="refresh" onclick="load_and_render()">↺ 更新</span>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">AIコール数</div>
+        <div class="big-num">${totalCalls.toLocaleString()}</div>
+        <div class="big-sub">${ymLabel}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">概算請求</div>
+        <div class="big-num">¥${yen.toLocaleString()}</div>
+        <div class="big-sub">${totalCalls}件 × ¥${PRICE}</div>
+        <div class="price-note">※ AI判定を使用した場合のみ</div>
+      </div>
+    </div>
+    ${totalImgs ? `<div class="card" style="margin-bottom:16px">
+      <div class="card-title">処理画像枚数（参考）</div>
+      <div class="big-num">${totalImgs.toLocaleString()}</div>
+      <div class="big-sub">平均 ${totalCalls ? (totalImgs/totalCalls).toFixed(1) : '-'} 枚/コール</div>
+    </div>` : ''}
+    ${clientRows.length > 1 ? `<div class="card">
+      <div class="card-title">クライアント別</div>
+      ${clientRows.map(r => `
+        <div class="client-row">
+          <span class="client-name">${r.name}</span>
+          <span>
+            <span class="client-calls">${r.calls}件</span>
+            <span class="client-yen"> ¥${(r.calls * PRICE).toLocaleString()}</span>
+          </span>
+        </div>`).join('')}
+    </div>` : ''}
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn btn-sm" onclick="resetToken()">トークンを変更</button>
+    </div>`;
+}
+
+async function load_and_render() {
+  if (!token) { renderSetup(); return; }
+  document.getElementById('app').innerHTML = '<div class="spinner">読み込み中…</div>';
+  try {
+    const raw = await fetchUsage();
+    allData = parseData(raw);
+    renderDashboard();
+  } catch(e) {
+    if (e.message === 'unauthorized') renderSetup('トークンが正しくありません');
+    else renderSetup('接続エラー: ' + e.message);
+  }
+}
+
+load_and_render();
+</script>
+</body>
+</html>
