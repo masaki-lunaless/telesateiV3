@@ -352,12 +352,17 @@ function cur() {
 }
 function adv() {
   const { isInfo, qs, idx } = cur();
+  const curId = qs[idx] ? qs[idx].id : null;
   if (isInfo) {
     if (idx + 1 < infoQs(S.fi).length) S.ii = idx + 1;
     else { S.stage = 'item'; S.ai = 0; S.fa = {}; }
   } else {
+    // 回答によって質問リストが増減してもindexがズレないよう、
+    // 「今答えた質問」の新リスト上の位置を探してから+1する（主石スキップバグ対策）
     const nqs = itemQs(S.fa);
-    if (idx + 1 < nqs.length) S.ai = idx + 1;
+    const pos = curId ? nqs.findIndex(q => q.id === curId) : -1;
+    const next = (pos >= 0 ? pos : idx) + 1;
+    if (next < nqs.length) S.ai = next;
   }
   render();
 }
@@ -556,7 +561,12 @@ async function runAiAppraise(files, catHint) {
       if (r.serial) setA('serial', String(r.serial)); // ケース裏・ギャラから読めたシリアルのみ
       if (r.caseSize) setA('size', String(r.caseSize)); // モデル特定時は公式ケース径
     }
-    if (Array.isArray(r.conds) && r.conds.length) setA('conds', r.conds);
+    if (Array.isArray(r.conds) && r.conds.length) {
+      // カテゴリの選択肢に存在する語彙のみ採用（時計語彙がバッグに混入するとUIで変更不能になるため）
+      const vocab = S.fa.cat === '時計' ? WATCH_CONDS : (S.fa.cat === '貴金属・ジュエリー' ? METAL_CONDS : BRAND_CONDS);
+      const cs = r.conds.filter(c => vocab.includes(c));
+      if (cs.length) setA('conds', cs);
+    }
     if (r.kinshu) setA('kinshu', r.kinshu);
     if (['なし', '主石のみ', '脇石のみ', '両方'].includes(r.stone)) setA('stone', r.stone);
     if (S.fa.stone && S.fa.stone !== 'なし') setA('hiju', 'できなかった'); // 石付きは比重測定が成立しない→質問も省略される
@@ -761,9 +771,8 @@ function itemNotes(a, i) {
   const parts = [(i + 1) + ':', 'カテゴリ: ' + a.cat];
   if (a.brand) parts.push('ブランド: ' + a.brand);
   if (a.name) parts.push('商品名: ' + a.name);
-  if (a.serial && a.serial !== 'わからない') parts.push('型番: ' + a.serial);
+  if (a.serial && a.serial !== 'わからない') parts.push((a.cat === '時計' ? 'シリアル: ' : '型番: ') + a.serial);
   if (a.model && a.model !== 'わからない') parts.push('型番: ' + a.model);
-  if (a.cat === '時計' && a.serial && a.serial !== 'わからない') { /* シリアルはserialに入っている場合modelと分離済み */ }
   if (a.metal) parts.push('金属種類: ' + a.metal);
   if (a.size) parts.push('ケースサイズ: ' + a.size);
   if (a.turbo) parts.push('ターボテスター: ' + a.turbo);
