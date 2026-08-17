@@ -785,9 +785,22 @@ async function restoreState() {
   return true;
 }
 
-function init() {
-  const saved = localStorage.getItem('asana_pat');
+async function init() {
+  await idbOpen();
+  let saved = localStorage.getItem('asana_pat');
   AI_TOKEN = localStorage.getItem('ai_token') || '';
+  // localStorageが消えていた場合はIndexedDBの控えから復旧（iOSのストレージ整理対策）
+  if (!saved) {
+    const cred = await idbGet('cred');
+    if (cred && cred.pat) {
+      saved = cred.pat;
+      AI_TOKEN = AI_TOKEN || cred.ai || '';
+      try {
+        localStorage.setItem('asana_pat', saved);
+        if (AI_TOKEN) localStorage.setItem('ai_token', AI_TOKEN);
+      } catch (e) {}
+    }
+  }
   const params = new URLSearchParams(location.search);
   const forceSetup = params.has('reset');
   const demo = params.has('demo');
@@ -797,12 +810,13 @@ function init() {
     S.fi = { store: 'プレビュー', requester: 'プレビュー', total: '1', repeater: 'いいえ', aimi: 'いいえ' };
     S.stage = 'item'; S.ai = 0; S.fa = {};
   }
-  if (forceSetup) { idbOpen().then(clearPersist); }
+  if (forceSetup) { clearPersist(); idbPut('cred', null); }
   if (saved && !forceSetup) {
     ASANA_PAT = saved;
+    idbPut('cred', { pat: ASANA_PAT, ai: AI_TOKEN }); // 起動のたびに控えを更新
     if (demo) { startApp(); }
     else {
-      idbOpen().then(restoreState).then(restored => {
+      restoreState().catch(() => false).then(restored => {
         startApp();
         if (restored) showToast('前回の入力を復元しました');
       });
@@ -821,6 +835,7 @@ function savePat() {
   ASANA_PAT = val; localStorage.setItem('asana_pat', val);
   const ai = $('ai-token-input').value.trim();
   if (ai) { AI_TOKEN = ai; localStorage.setItem('ai_token', ai); }
+  idbOpen().then(() => idbPut('cred', { pat: ASANA_PAT, ai: AI_TOKEN })); // IndexedDBに二重保存（localStorage消失対策）
   $('pat-screen').classList.remove('show');
   startApp();
 }
