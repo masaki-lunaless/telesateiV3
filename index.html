@@ -439,46 +439,41 @@ function addImages(input) {
   if (!S.fa._imgs) S.fa._imgs = [];
   Array.from(input.files).forEach(file => {
     const reader = new FileReader();
-    reader.onload = e => { S.fa._imgs.push({ file, dataUrl: e.target.result }); renderBody(); };
+    reader.onload = e => { S.fa._imgs.push({ file, dataUrl: e.target.result }); persistImgs(); renderBody(); };
     reader.readAsDataURL(file);
   });
   input.value = '';
 }
-function removeImage(i) { S.fa._imgs.splice(i, 1); renderBody(); }
+function removeImage(i) { S.fa._imgs.splice(i, 1); persistImgs(); renderBody(); }
 // ---- AI査定（Worker proxy経由） ----
 // ---- ガイド撮影（Classicモード（ガイド撮影）） ----
 let TUT = null;
 function startTutorial() { TUT = { cat: null, sub: null, steps: [], i: 0, files: [], urls: [], log: [] }; renderTut(); $('tut-overlay').classList.add('show'); }
-function tutCancel() { TUT = null; $('tut-overlay').classList.remove('show'); }
+function tutCancel() { TUT = null; idbPut('tut', null); $('tut-overlay').classList.remove('show'); }
 function tutStart(c) { TUT.cat = c; TUT.sub = null; TUT.steps = SHOT_GUIDES[c] || []; TUT.i = 0; renderTut(); }
 function tutSub(sv) { TUT.sub = sv; TUT.steps = METAL_SUBGUIDES[sv] || []; TUT.i = 0; renderTut(); }
 function tutBack() {
   if (!TUT) return;
   if (TUT.i > 0) {
     const took = TUT.log.pop();
-    if (took) { TUT.files.pop(); const u = TUT.urls.pop(); if (u) URL.revokeObjectURL(u); }
+    if (took) { TUT.files.pop(); TUT.urls.pop(); }
     TUT.i--;
   } else if (TUT.sub) { TUT.sub = null; TUT.steps = []; }
   else if (TUT.cat) { TUT.cat = null; TUT.steps = []; }
-  renderTut();
+  persistTut(); renderTut();
 }
 function tutShoot() { $('tut-input').click(); }
 function tutOnFile(input) {
   const f = input.files[0]; input.value = '';
   if (!f || !TUT) return;
-  TUT.files.push(f);
-  const url = URL.createObjectURL(f);
-  TUT.urls.push(url);
-  // サムネを追記（全件再描画しない）
-  const wrap = document.getElementById('tut-thumbs');
-  if (wrap) {
-    const img = document.createElement('img');
-    img.src = url; img.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #E4E6F0';
-    wrap.appendChild(img);
-  }
-  TUT.log.push(true); TUT.i++; renderTut();
+  const r = new FileReader();
+  r.onload = e => {
+    TUT.files.push(f); TUT.urls.push(e.target.result); // dataUrlで保持（リロード復元可能）
+    TUT.log.push(true); TUT.i++; persistTut(); renderTut();
+  };
+  r.readAsDataURL(f);
 }
-function tutSkip() { TUT.log.push(false); TUT.i++; renderTut(); }
+function tutSkip() { TUT.log.push(false); TUT.i++; persistTut(); renderTut(); }
 function tutFinish() {
   const files = TUT.files, cat = TUT.cat;
   tutCancel();
@@ -488,7 +483,7 @@ function renderTut() {
   if (!TUT) return;
   const b = $('tut-body');
   $('tut-back').style.visibility = TUT.cat ? 'visible' : 'hidden';
-  const thumbs = TUT.urls.length && !document.getElementById('tut-thumbs') ? '<div class="tut-thumbs" id="tut-thumbs"></div>' : '';
+  const thumbs = TUT.urls.length ? `<div class="tut-thumbs">${TUT.urls.map(u => `<img src="${u}">`).join('')}</div>` : '';
   if (!TUT.cat) {
     $('tut-count').textContent = 'ガイド撮影';
     b.innerHTML = `<div class="tut-msg">何を査定する？</div><div class="tut-cat">${CATS.map(c => `<button class="btn btn-ghost" onclick="tutStart('${c}')">${c}</button>`).join('')}</div>`;
@@ -544,6 +539,7 @@ async function runAiAppraise(files, catHint) {
     const r = out.result;
     // 写真を商品画像としてセット
     S.fa._imgs = imgs;
+    persistImgs();
     // プリフィル（AIが答えられた分だけ。空文字は上書きしない）
     S.fa._aiSet = [];
     const setA = (k, v) => { S.fa[k] = v; S.fa._aiSet.push(k); };
@@ -598,12 +594,12 @@ async function runAiAppraise(files, catHint) {
 function finishItem() {
   if (S.fa.jsei === '有') {
     showModal('磁性あり', 'この商品は通常査定には入りません。預かり対応品として追加しますか？', () => {
-      S.azukari.push(S.fa); S.fa = {}; S.ai = 0; goCart();
+      S.azukari.push(S.fa); S.fa = {}; S.ai = 0; persistImgs(); goCart();
       showToast('⚠️ 預かり対応品 ' + S.azukari.length + ' 点目を追加しました');
     });
     return;
   }
-  S.cart.push(S.fa); S.fa = {}; S.ai = 0; goCart();
+  S.cart.push(S.fa); S.fa = {}; S.ai = 0; persistImgs(); goCart();
   showToast('商品 ' + S.cart.length + ' 点目を追加しました');
 }
 
@@ -613,6 +609,7 @@ function itemTitle(a) {
   return [a.brand, a.name].filter(Boolean).join(' ') || a.cat || '';
 }
 function render() {
+  persistState();
   ['ask-screen', 'sent-screen'].forEach(id => $(id).classList.remove('show'));
   $('cart-screen').classList.remove('show');
   if (S.stage === 'cart') { renderCart(); $('cart-screen').classList.add('show'); return; }
@@ -722,6 +719,72 @@ function renderCart() {
 }
 
 // ---- PAT / Asana ----
+// ---- 状態復元システム（カメラ復帰・メモリ解放によるリロード対策） ----
+const IDB = { db: null };
+function idbOpen() { return new Promise((ok) => {
+  try {
+    const r = indexedDB.open('telesatei', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => { IDB.db = r.result; ok(); };
+    r.onerror = () => ok();
+  } catch (e) { ok(); }
+}); }
+function idbPut(k, v) { return new Promise((ok) => {
+  if (!IDB.db) return ok();
+  try { const t = IDB.db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = ok; t.onerror = () => ok(); } catch (e) { ok(); }
+}); }
+function idbGet(k) { return new Promise((ok) => {
+  if (!IDB.db) return ok(null);
+  try { const t = IDB.db.transaction('kv', 'readonly'); const rq = t.objectStore('kv').get(k); rq.onsuccess = () => ok(rq.result || null); rq.onerror = () => ok(null); } catch (e) { ok(null); }
+}); }
+function stripItem(a) { const c = Object.assign({}, a); delete c._imgs; return c; }
+function dataUrlToFile(du, i) {
+  const [meta, b64] = du.split(',');
+  const mt = (meta.match(/data:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+  for (let j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j);
+  return new File([u8], 'photo' + i + '.jpg', { type: mt });
+}
+let _persistTimer = null;
+function persistState() {
+  clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    if (S.stage === 'sent') return;
+    idbPut('state', { stage: S.stage, fi: S.fi, fa: stripItem(S.fa), ai: S.ai, ii: S.ii,
+      cart: S.cart.map(stripItem), azukari: S.azukari.map(stripItem), t: Date.now() });
+  }, 200);
+}
+function persistImgs() {
+  idbPut('imgs_fa', (S.fa._imgs || []).map(im => im.dataUrl));
+  idbPut('imgs_cart', S.cart.map(a => (a._imgs || []).map(im => im.dataUrl)));
+  idbPut('imgs_azukari', S.azukari.map(a => (a._imgs || []).map(im => im.dataUrl)));
+}
+function persistTut() {
+  idbPut('tut', TUT && TUT.cat ? { cat: TUT.cat, sub: TUT.sub, i: TUT.i, log: TUT.log, urls: TUT.urls } : null);
+}
+function clearPersist() { ['state', 'imgs_fa', 'imgs_cart', 'imgs_azukari', 'tut'].forEach(k => idbPut(k, null)); }
+async function restoreState() {
+  const st = await idbGet('state');
+  if (!st || !st.stage || Date.now() - (st.t || 0) > 12 * 3600 * 1000) return false;
+  const hasContent = (st.cart || []).length || (st.azukari || []).length || Object.keys(st.fa || {}).length || Object.keys(st.fi || {}).length;
+  if (!hasContent) return false;
+  const [fa, cart, az, tut] = await Promise.all([idbGet('imgs_fa'), idbGet('imgs_cart'), idbGet('imgs_azukari'), idbGet('tut')]);
+  const hydrate = (dus) => (dus || []).map((du, i) => ({ file: dataUrlToFile(du, i), dataUrl: du }));
+  S.stage = st.stage; S.fi = st.fi || {}; S.fa = st.fa || {}; S.ai = st.ai || 0; S.ii = st.ii || 0;
+  S.cart = st.cart || []; S.azukari = st.azukari || [];
+  S.fa._imgs = hydrate(fa);
+  S.cart.forEach((a, i) => { a._imgs = hydrate((cart || [])[i]); });
+  S.azukari.forEach((a, i) => { a._imgs = hydrate((az || [])[i]); });
+  if (tut && tut.cat) {
+    TUT = { cat: tut.cat, sub: tut.sub || null,
+      steps: tut.sub ? (METAL_SUBGUIDES[tut.sub] || []) : (SHOT_GUIDES[tut.cat] || []),
+      i: tut.i || 0, log: tut.log || [], urls: tut.urls || [],
+      files: (tut.urls || []).map((u, i) => dataUrlToFile(u, i)) };
+    setTimeout(() => { $('tut-overlay').classList.add('show'); renderTut(); }, 100);
+  }
+  return true;
+}
+
 function init() {
   const saved = localStorage.getItem('asana_pat');
   AI_TOKEN = localStorage.getItem('ai_token') || '';
@@ -734,7 +797,18 @@ function init() {
     S.fi = { store: 'プレビュー', requester: 'プレビュー', total: '1', repeater: 'いいえ', aimi: 'いいえ' };
     S.stage = 'item'; S.ai = 0; S.fa = {};
   }
-  if (saved && !forceSetup) { ASANA_PAT = saved; startApp(); }
+  if (forceSetup) { idbOpen().then(clearPersist); }
+  if (saved && !forceSetup) {
+    ASANA_PAT = saved;
+    if (demo) { startApp(); }
+    else {
+      idbOpen().then(restoreState).then(restored => {
+        startApp();
+        if (restored) showToast('前回の入力を復元しました');
+      });
+      return;
+    }
+  }
   else {
     if (saved) $('pat-input').value = saved;
     if (AI_TOKEN) $('ai-token-input').value = AI_TOKEN;
@@ -877,13 +951,14 @@ async function submitToAsana() {
     $('sent-link').innerHTML = mainTaskId
       ? `タスクID: ${mainTaskId}<br><a href="https://app.asana.com/0/${ASANA_PROJECT_ID}/${mainTaskId}" target="_blank">Asanaで確認する →</a>`
       : '送信完了（預かり品のみ）';
-    S.stage = 'sent'; render();
+    S.stage = 'sent'; clearPersist(); render();
   } catch (e) {
     showToast('エラー: ' + e.message);
     renderCart();
   }
 }
 function resetAll() {
+  clearPersist();
   S = { stage: 'info', ii: 0, ai: 0, fi: {}, fa: {}, cart: [], azukari: [] };
   selectedMember = null;
   render();
