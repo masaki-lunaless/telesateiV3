@@ -107,6 +107,8 @@
   .ci-del { border: none; background: none; color: var(--sub); font-size: 17px; padding: 0 2px; }
   .empty { font-size: 12.5px; color: #B4B6C6; text-align: center; padding: 10px 0; }
   .cart-foot-note { font-size: 11px; color: #B4B6C6; text-align: center; margin-top: 10px; line-height: 1.7; }
+  .ci-btns { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .ci-edit { border: none; background: #EFEFF4; border-radius: 8px; width: 30px; height: 30px; font-size: 13px; cursor: pointer; }
   .pat-reset { font-size: 12px; color: var(--sub); text-align: center; margin-top: 18px; text-decoration: underline; cursor: pointer; }
 
   /* ---- sent ---- */
@@ -191,6 +193,7 @@
       </div>
       <div id="q-body"></div>
       <div class="pat-reset" onclick="resetPat()">APIキー設定を変更する</div>
+      <div class="pat-reset" style="color:#C0392B" onclick="confirmDiscard()">🗑 この依頼を破棄して最初から</div>
     </div></div>
   </div>
 
@@ -205,6 +208,7 @@
     <button class="btn btn-primary" id="submit-btn" style="margin-top:10px" onclick="submitToAsana()">Asanaに送信</button>
     <div class="cart-foot-note">預かり対応品は自動で別タスクとして作成され、<br>預かり専用セクションに移動します</div>
     <div class="pat-reset" onclick="resetPat()">APIキーを変更する</div>
+    <div class="pat-reset" style="color:#C0392B" onclick="confirmDiscard()">🗑 この依頼を破棄して最初から</div>
   </div>
 
   <div class="screen" id="sent-screen">
@@ -704,9 +708,21 @@ function cartRow(a, i, warn) {
     <span class="ci-num">${warn ? '預' : ''}${String(i + 1).padStart(2, '0')}</span>
     <div class="ci-body"><div class="ci-title">${esc(itemTitle(a))}</div><div class="ci-sub">${esc(bits.join(' ／ '))}</div>
     ${junk ? '<span class="ci-warn-badge">⚠ ジャンク扱い</span>' : ''}${warn ? '<span class="ci-warn-badge">⚠ 預かり対応（磁性あり）</span>' : ''}</div>
-    <button class="ci-del" onclick="removeItem(${warn}, ${i})">×</button></div>`;
+    <div class="ci-btns"><button class="ci-edit" onclick="editItem(${warn}, ${i})">✏️</button><button class="ci-del" onclick="removeItem(${warn}, ${i})">×</button></div></div>`;
 }
-function removeItem(warn, i) { (warn ? S.azukari : S.cart).splice(i, 1); renderCart(); }
+function removeItem(warn, i) { (warn ? S.azukari : S.cart).splice(i, 1); persistImgs(); renderCart(); }
+function editItem(warn, i) {
+  // カートから商品を取り出して質問フローを再走（回答はプリフィル済み）
+  const list = warn ? S.azukari : S.cart;
+  const item = list.splice(i, 1)[0];
+  if (!item) return;
+  S.fa = item;
+  S.ai = 0;
+  S.stage = 'item';
+  persistImgs();
+  render();
+  showToast('編集モード：修正したい質問まで「次へ」で進んでください');
+}
 function renderCart() {
   $('cart-meta').textContent = (S.fi.store || '店舗未選択') + ' ・ 起票者：' + (S.fi.requester || '—');
   $('cart-list').innerHTML = S.cart.map((a, i) => cartRow(a, i, false)).join('') || '<div class="empty">まだ商品がありません</div>';
@@ -751,7 +767,7 @@ function persistState() {
   _persistTimer = setTimeout(() => {
     if (S.stage === 'sent') return;
     idbPut('state', { stage: S.stage, fi: S.fi, fa: stripItem(S.fa), ai: S.ai, ii: S.ii,
-      cart: S.cart.map(stripItem), azukari: S.azukari.map(stripItem), t: Date.now() });
+      cart: S.cart.map(stripItem), azukari: S.azukari.map(stripItem), member: selectedMember, t: Date.now() });
   }, 200);
 }
 function persistImgs() {
@@ -763,6 +779,15 @@ function persistTut() {
   idbPut('tut', TUT && TUT.cat ? { cat: TUT.cat, sub: TUT.sub, i: TUT.i, log: TUT.log, urls: TUT.urls } : null);
 }
 function clearPersist() { ['state', 'imgs_fa', 'imgs_cart', 'imgs_azukari', 'tut'].forEach(k => idbPut(k, null)); }
+function persistNow() {
+  clearTimeout(_persistTimer);
+  if (S.stage === 'sent') return;
+  idbPut('state', { stage: S.stage, fi: S.fi, fa: stripItem(S.fa), ai: S.ai, ii: S.ii,
+    cart: S.cart.map(stripItem), azukari: S.azukari.map(stripItem), member: selectedMember, t: Date.now() });
+}
+// カメラ起動・アプリ切替でページが殺される直前に確実に保存する
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistNow(); });
+window.addEventListener('pagehide', persistNow);
 async function restoreState() {
   const st = await idbGet('state');
   if (!st || !st.stage || Date.now() - (st.t || 0) > 12 * 3600 * 1000) return false;
@@ -772,6 +797,7 @@ async function restoreState() {
   const hydrate = (dus) => (dus || []).map((du, i) => ({ file: dataUrlToFile(du, i), dataUrl: du }));
   S.stage = st.stage; S.fi = st.fi || {}; S.fa = st.fa || {}; S.ai = st.ai || 0; S.ii = st.ii || 0;
   S.cart = st.cart || []; S.azukari = st.azukari || [];
+  if (st.member) selectedMember = st.member;
   S.fa._imgs = hydrate(fa);
   S.cart.forEach((a, i) => { a._imgs = hydrate((cart || [])[i]); });
   S.azukari.forEach((a, i) => { a._imgs = hydrate((az || [])[i]); });
@@ -971,6 +997,9 @@ async function submitToAsana() {
     showToast('エラー: ' + e.message);
     renderCart();
   }
+}
+function confirmDiscard() {
+  showModal('入力を破棄しますか？', 'このご依頼の入力内容（カート・写真・依頼情報すべて）を削除して最初からやり直します。この操作は取り消せません。', () => { resetAll(); showToast('破棄しました。最初から入力できます'); }, { icon: '🗑', okLabel: '破棄してやり直す' });
 }
 function resetAll() {
   clearPersist();
